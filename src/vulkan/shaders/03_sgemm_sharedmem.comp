@@ -1,0 +1,64 @@
+#version 450
+layout(local_size_x = 32, local_size_y = 32) in;
+
+layout(set = 0, binding = 0) buffer InputBufferA {
+    float data[];
+} A;
+
+layout(set = 0, binding = 1) buffer InputBufferB {
+    float data[];
+} B;
+
+// Declare output buffer
+layout(set = 0, binding = 2) buffer OutputBuffer {
+    float data[];
+} C;
+
+layout(push_constant) uniform PushConstants {
+    int M;
+    int N;
+    int K;
+    float alpha;
+    float beta;
+} pushConstants;
+
+const int BLOCKSIZE = 32;
+
+shared float As[BLOCKSIZE * BLOCKSIZE];
+shared float Bs[BLOCKSIZE * BLOCKSIZE];
+
+void main() {
+    const uint cRow = gl_WorkGroupSize.x;
+    const uint cCol = gl_WorkGroupSize.y;
+
+    const uint threadCol = gl_LocalInvocationIndex % BLOCKSIZE;
+    const uint threadRow = gl_LocalInvocationIndex / BLOCKSIZE;
+
+    uint A_offset = cRow * BLOCKSIZE * pushConstants.K;
+    uint B_offset = cCol * BLOCKSIZE;
+    uint C_offset = cRow * BLOCKSIZE * pushConstants.N + cCol * BLOCKSIZE;
+
+    float tmp = 0.0;
+    
+    for(int bkIdx = 0; bkIdx < pushConstants.K; bkIdx += BLOCKSIZE) {
+        As[threadRow * BLOCKSIZE + threadCol] = A.data[A_offset + threadRow * pushConstants.K + threadCol];
+        Bs[threadRow * BLOCKSIZE + threadCol] = B.data[B_offset + threadRow * pushConstants.N + threadCol];
+
+        memoryBarrierShared();
+        barrier();
+
+        A_offset += BLOCKSIZE;
+	B_offset += BLOCKSIZE * pushConstants.N;
+
+	for (int dotIdx = 0; dotIdx < BLOCKSIZE; ++dotIdx) {
+		tmp += As[threadRow * BLOCKSIZE + dotIdx] * Bs[dotIdx * BLOCKSIZE + threadCol];
+	}
+
+        memoryBarrierShared();
+        barrier();
+    }
+    
+    C.data[C_offset + threadRow * pushConstants.N + threadCol] = pushConstants.alpha * tmp + pushConstants.beta * C.data[C_offset + threadRow * pushConstants.N + threadCol];
+
+}
+
