@@ -1,0 +1,49 @@
+#version 450
+layout(local_size_x = 32, local_size_y = 32) in;
+
+layout(set = 0, binding = 0) buffer InputBufferA {
+    float data[];
+} A;
+
+layout(set = 0, binding = 1) buffer InputBufferB {
+    float data[];
+} B;
+
+// Declare output buffer
+layout(set = 0, binding = 2) buffer OutputBuffer {
+    float data[];
+} C;
+
+layout(push_constant) uniform PushConstants {
+    int M;
+    int N;
+    int K;
+    float alpha;
+    float beta;
+} pushConstants;
+
+void main() {
+    uint localX = gl_LocalInvocationID.x;
+    uint localY = gl_LocalInvocationID.y;
+
+    uint groupX = gl_WorkGroupID.x;
+    uint groupY = gl_WorkGroupID.y;
+
+    uint x = groupX * gl_WorkGroupSize.x + localX;
+    uint y = groupY * gl_WorkGroupSize.y + localY;
+
+    // Ensure the thread is within the bounds of the matrix C
+    if (x < pushConstants.M && y < pushConstants.N) {
+        float tmp = 0.0;
+
+        // Compute the dot product for one element of C
+        for (int i = 0; i < pushConstants.K; ++i) {
+            tmp += A.data[x * pushConstants.K + i] * B.data[i * pushConstants.N + y];
+        }
+
+        //C = α * (A * B) + β * C
+        C.data[x * pushConstants.N + y] = pushConstants.alpha * tmp + pushConstants.beta + C.data[x * pushConstants.N + y];
+
+    }
+}
+
