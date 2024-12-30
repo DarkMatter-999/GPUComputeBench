@@ -3,8 +3,9 @@
 
 const int BM = 64;
 const int BN = 64;
-const int BK = 8;
-const int TM = 8;
+const int BK = 16;
+const int TM = 4;
+const int TN = 4;
 
 bool checkValidationLayerSupport() {
 	std::vector<const char*> requiredLayers = { "VK_LAYER_KHRONOS_validation" };
@@ -242,7 +243,7 @@ int main(int argc, char *argv[]) {
 
 	// Shader module
 	std::vector<char> ShaderContents;
-	if (std::ifstream ShaderFile{ "shaders/04_sgemm_1dblocktiling.comp.spv", std::ios::binary | std::ios::ate }) {
+	if (std::ifstream ShaderFile{ "shaders/05_sgemm_2dblocktiling.comp.spv", std::ios::binary | std::ios::ate }) {
 		const size_t FileSize = ShaderFile.tellg();
 		ShaderFile.seekg(0);
 		ShaderContents.resize(FileSize, '\0');
@@ -433,7 +434,7 @@ int main(int argc, char *argv[]) {
 			&pushConstantsData
 		);
 
-		CmdBuffer.dispatch(CEIL_DIV(pushConstantsData.M, BN), CEIL_DIV(pushConstantsData.N, BN), 1);
+		CmdBuffer.dispatch(CEIL_DIV(pushConstantsData.N, BN), CEIL_DIV(pushConstantsData.M, BM), 1);
 
 		vk::MemoryBarrier postComputeBarrier(
 			vk::AccessFlagBits::eShaderWrite,     // Source access mask
