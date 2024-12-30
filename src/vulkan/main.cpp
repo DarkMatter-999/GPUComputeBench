@@ -139,11 +139,11 @@ int main(int argc, char *argv[]) {
 
 	// Create buffers
 	const uint32_t NumElements = max_size;
-	const uint32_t BufferSize = NumElements * NumElements * sizeof(float);
+	const uint32_t MaxBufferSize = NumElements * NumElements * sizeof(float);
 
 	vk::BufferCreateInfo BufferCreateInfo{
 		vk::BufferCreateFlags(),                    // Flags
-		BufferSize,                                 // Size
+		MaxBufferSize,                                 // Size
 		vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eTransferSrc,    // Usage
 		vk::SharingMode::eExclusive,                // Sharing mode
 		1,                                          // Number of queue family indices
@@ -155,7 +155,7 @@ int main(int argc, char *argv[]) {
 
 	vk::BufferCreateInfo StagingBufferCreateInfo{
 		vk::BufferCreateFlags(),
-		BufferSize,
+		MaxBufferSize,
 		vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eTransferDst,
 		vk::SharingMode::eExclusive,
 		1,
@@ -223,7 +223,7 @@ int main(int argc, char *argv[]) {
 
 
 	// Map memory and write
-	float* StagingBufferPtr = static_cast<float *>(Device.mapMemory(StagingBufferMemory, 0, BufferSize));
+	float* StagingBufferPtr = static_cast<float *>(Device.mapMemory(StagingBufferMemory, 0, MaxBufferSize));
 
 	// for (uint32_t I = 0; I < NumElements; ++I) {
 	// StagingBufferPtr[I] = I - 0.1f;
@@ -306,9 +306,9 @@ int main(int argc, char *argv[]) {
 	vk::DescriptorSetAllocateInfo DescriptorSetAllocInfo(DescriptorPool, 1, &DescriptorSetLayout);
 	const std::vector<vk::DescriptorSet> DescriptorSets = Device.allocateDescriptorSets(DescriptorSetAllocInfo);
 	vk::DescriptorSet DescriptorSet = DescriptorSets.front();
-	vk::DescriptorBufferInfo InBufferAInfo(InBufferA, 0, NumElements * NumElements * sizeof(float));
-	vk::DescriptorBufferInfo InBufferBInfo(InBufferB, 0, NumElements * NumElements * sizeof(float));
-	vk::DescriptorBufferInfo OutBufferInfo(OutBuffer, 0, NumElements * NumElements * sizeof(float));
+	vk::DescriptorBufferInfo InBufferAInfo(InBufferA, 0, MaxBufferSize);
+	vk::DescriptorBufferInfo InBufferBInfo(InBufferB, 0, MaxBufferSize);
+	vk::DescriptorBufferInfo OutBufferInfo(OutBuffer, 0, MaxBufferSize);
 
 	const std::vector<vk::WriteDescriptorSet> WriteDescriptorSets = {
 		{DescriptorSet, 0, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &InBufferAInfo},
@@ -356,9 +356,9 @@ int main(int argc, char *argv[]) {
 
 		CmdBuffer.writeTimestamp(vk::PipelineStageFlagBits::eComputeShader, queryPool, 0);
 
-		randomize_matrix(StagingBufferPtr, NumElements * NumElements);
+		randomize_matrix(StagingBufferPtr, size * size);
 
-		vk::BufferCopy CopyRegion(0, 0, BufferSize);
+		vk::BufferCopy CopyRegion(0, 0, size * size * sizeof(float));
 		CmdBuffer.copyBuffer(StagingBuffer, InBufferA, { CopyRegion });
 
 		vk::MemoryBarrier memoryBarrier(
@@ -384,7 +384,7 @@ int main(int argc, char *argv[]) {
 		std::cout << std::endl;
 #endif
 
-		randomize_matrix(StagingBufferPtr, NumElements * NumElements);
+		randomize_matrix(StagingBufferPtr, size * size);
 
 		CmdBuffer.copyBuffer(StagingBuffer, InBufferB, { CopyRegion });
 
