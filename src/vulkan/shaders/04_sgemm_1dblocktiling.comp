@@ -1,0 +1,84 @@
+#version 450
+layout(local_size_x = 512, local_size_y = 1, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) buffer InputBufferA {
+    float data[];
+} A;
+
+layout(set = 0, binding = 1) buffer InputBufferB {
+    float data[];
+} B;
+
+// Declare output buffer
+layout(set = 0, binding = 2) buffer OutputBuffer {
+    float data[];
+} C;
+
+layout(push_constant) uniform PushConstants {
+    int M;
+    int N;
+    int K;
+    float alpha;
+    float beta;
+} pushConstants;
+
+const int BLOCKSIZE = 32;
+const int BM = 64;
+const int BN = 64;
+const int BK = 8;
+const int TM = 8;
+
+shared float As[BM * BK];
+shared float Bs[BK * BN];
+
+void main() {
+
+    const uint cRow = gl_WorkGroupSize.x;
+    const uint cCol = gl_WorkGroupSize.y;
+
+    const uint threadCol = gl_LocalInvocationIndex % BN;
+    const uint threadRow = gl_LocalInvocationIndex / BN;
+
+    uint A_offset = cRow * BM * pushConstants.K;
+    uint B_offset = cCol * BN;
+    uint C_offset = cRow * BM * pushConstants.N + cCol * BN;
+
+    // assert(pushConstants.BM * pushConstants.BK == gl_WorkGroupSize.x);
+    // assert(pushConstants.BN * pushConstants.BK == gl_WorkGroupSize.x);
+
+    const uint innerColA = gl_LocalInvocationIndex % BK;
+    const uint innerRowA = gl_LocalInvocationIndex / BK;
+    const uint innerColB = gl_LocalInvocationIndex % BN;
+    const uint innerRowB = gl_LocalInvocationIndex / BN;
+
+
+    float threadResults[TM];
+
+    for(int bkIdx = 0; bkIdx < pushConstants.K; bkIdx += BK) {
+        As[innerRowA * BK + innerColA] = A.data[A_offset + innerRowA * pushConstants.K + innerColA];
+        Bs[innerRowB * BN + innerColB] = B.data[B_offset + innerRowB * pushConstants.N + innerColB];
+
+        memoryBarrierShared();
+        barrier();
+
+        A_offset += BK;
+        B_offset += BK * pushConstants.N;
+
+        for (int dotIdx = 0; dotIdx < BK; ++dotIdx) {
+            float tmpB = Bs[dotIdx * BN + threadCol];
+
+            for (uint resIdx = 0; resIdx < TM; ++resIdx) {
+                threadResults[resIdx] += As[(threadRow * TM + resIdx) * BK + dotIdx] * tmpB;
+            }
+        }
+
+        memoryBarrierShared();
+        barrier();
+    }
+
+    for (uint resIdx = 0; resIdx < TM; ++resIdx) {
+        C.data[C_offset + (threadRow * TM + resIdx) * pushConstants.N + threadCol] = pushConstants.alpha * threadResults[resIdx] + pushConstants.beta * C.data[C_offset + (threadRow * TM + resIdx) * pushConstants.N + threadCol];
+    }
+
+}
+
