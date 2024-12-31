@@ -1,0 +1,96 @@
+#version 450
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) readonly buffer InputBufferA {
+	vec4 data[];
+} A;
+
+layout(set = 0, binding = 1) readonly buffer InputBufferB {
+	vec4 data[];
+} B;
+
+// Declare output buffer
+layout(set = 0, binding = 2) buffer OutputBuffer {
+	vec4 data[];
+} C;
+
+layout(push_constant) uniform PushConstants {
+    int M;
+    int N;
+    int K;
+    float alpha;
+    float beta;
+} pushConstants;
+
+const int BLOCKSIZE = 32;
+const int BM = 64;
+const int BN = 64;
+const int BK = 16;
+const int TM = 4;
+const int TN = 4;
+
+shared vec4 As[BM * BK / 4];
+shared vec4 Bs[BK * BN / 4];
+
+void main() {
+
+    const uint cRow = gl_WorkGroupSize.x;
+    const uint cCol = gl_WorkGroupSize.y;
+
+    const uint threadCol = gl_LocalInvocationIndex % (BN / TN);
+    const uint threadRow = gl_LocalInvocationIndex / (BN / TN);
+
+    uint A_offset = cRow * BM * pushConstants.K;
+    uint B_offset = cCol * BN;
+    uint C_offset = cRow * BM * pushConstants.N + cCol * BN;
+
+    const uint innerRowA = gl_LocalInvocationIndex / (BK / 4);
+	const uint innerColA = gl_LocalInvocationIndex % (BK / 4);
+	const uint innerRowB = gl_LocalInvocationIndex / (BN / 4);
+	const uint innerColB = gl_LocalInvocationIndex % (BN / 4);
+
+
+	vec4 threadResults[TM * TN / 4];
+	vec4 regM[TM / 4];
+	vec4 regN[TN / 4];
+
+	for(int bkIdx = 0; bkIdx < pushConstants.K; bkIdx += BK) {
+		As[innerColA * BM + innerRowA] = A.data[A_offset / 4 + innerRowA * pushConstants.K / 4 + innerColA];
+
+		Bs[innerRowB * BN / 4 + innerColB] = B.data[B_offset / 4 + innerRowB * pushConstants.N / 4 + innerColB];
+
+		memoryBarrierShared();
+		barrier();
+
+		A_offset += BK;
+		B_offset += BK * pushConstants.N;
+
+		for (uint dotIdx = 0; dotIdx < BK; ++dotIdx) {
+			for (uint i = 0; i < TM; i += 4) {
+				regM[i] = As[(threadRow * TM / 4 + i) * BK + dotIdx];
+			}
+			for (uint i = 0; i < TN; i += 4) {
+				regN[i] = Bs[dotIdx * BN + threadCol * TN + i];
+			}
+			for (uint resIdxM = 0; resIdxM < TM; ++resIdxM) {
+				vec4 acc = threadResults[resIdxM];
+				for (uint resIdxN = 0; resIdxN < TN; resIdxN += 4) {
+					acc += regM[resIdxM] * regN[resIdxN];
+				}
+				threadResults[resIdxM] = acc;
+			}
+		}
+		memoryBarrierShared();
+		barrier();
+	}
+
+	for (uint resIdxM = 0; resIdxM < TM; resIdxM += 1) {
+		for (uint resIdxN = 0; resIdxN < TN; resIdxN += 4) {
+			uint baseIndex = (threadRow * TM + resIdxM) * pushConstants.N + threadCol * TN + resIdxN;
+
+			C.data[C_offset / 4 + baseIndex] = pushConstants.alpha * threadResults[resIdxM * TN + resIdxN] + pushConstants.beta * C.data[C_offset / 4 + baseIndex];
+
+		}
+	}
+}
+
