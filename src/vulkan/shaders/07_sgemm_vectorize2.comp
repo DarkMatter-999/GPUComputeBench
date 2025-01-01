@@ -9,7 +9,6 @@ layout(set = 0, binding = 1) buffer InputBufferB {
     float data[];
 } B;
 
-// Declare output buffer
 layout(set = 0, binding = 2) buffer OutputBuffer {
     vec4 data[];
 } C;
