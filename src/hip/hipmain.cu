@@ -5,7 +5,8 @@
 #include "common.h"
 
 // #include "01_sgemm_naive.cuh"
-#include "02_sgemm_coalesce.cuh"
+// #include "02_sgemm_coalesce.cuh"
+#include "03_sgemm_sharedmem.cuh"
 
 int main() {
 	int N = 6;
@@ -57,7 +58,7 @@ int main() {
 		hipCheck(hipEventRecord(beg));
 
 		for (int j = 0; j < repeat_times; j++) {
-			run_sgemm_coalesce(m, n, k, alpha, dA, dB, beta, dC);
+			run_sgemm_shared_mem(m, n, k, alpha, dA, dB, beta, dC);
 		}
 
 		hipCheck(hipEventRecord(end));
