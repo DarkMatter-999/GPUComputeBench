@@ -8,7 +8,8 @@
 // #include "02_sgemm_coalesce.cuh"
 // #include "03_sgemm_sharedmem.cuh"
 // #include "04_sgemm_1dblocktiling.cuh"
-#include "05_sgemm_2dblocktiling.cuh"
+// #include "05_sgemm_2dblocktiling.cuh"
+#include "06_sgemm_vectorize.cuh"
 
 int main() {
 	int N = 6;
@@ -60,7 +61,7 @@ int main() {
 		hipCheck(hipEventRecord(beg));
 
 		for (int j = 0; j < repeat_times; j++) {
-			run_sgemm_2d_blocktiling(m, n, k, alpha, dA, dB, beta, dC);
+			run_sgemm_vectorize(m, n, k, alpha, dA, dB, beta, dC);
 		}
 
 		hipCheck(hipEventRecord(end));
